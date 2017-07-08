@@ -910,6 +910,7 @@ int capi_rsa_sign(int dtype, const unsigned char *m, unsigned int m_len,
     return ret;
 }
 
+// @return flen 
 int capi_rsa_priv_dec(int flen, const unsigned char *from,
                       unsigned char *to, RSA *rsa, int padding)
 {

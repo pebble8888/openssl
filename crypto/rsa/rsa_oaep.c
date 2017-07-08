@@ -38,62 +38,101 @@ int RSA_padding_add_PKCS1_OAEP(unsigned char *to, int tlen,
                                            param, plen, NULL, NULL);
 }
 
-int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
-                                    const unsigned char *from, int flen,
-                                    const unsigned char *param, int plen,
-                                    const EVP_MD *md, const EVP_MD *mgf1md)
+/**
+ * 重要その2
+ */
+int RSA_padding_add_PKCS1_OAEP_mgf1(unsigned char *to,              // 出力
+                                    int tlen,                       // RSA キーの長さ
+                                    const unsigned char *from,      // 入力メッセージ
+                                    int flen,                       // 入力メッセージ長 
+                                    const unsigned char *param,     // ラベル
+                                    int plen,                       // ラベルの長さ 
+                                    const EVP_MD *md,               // ラベルに使うハッシュのタイプ 
+                                    const EVP_MD *mgf1md)           // MGFに使うハッシュタイプ
 {
-    int i, emlen = tlen - 1;
+    // tlen : 2048 / 8 = 256 // RSAキーのバイト数
+    int i;
     unsigned char *db, *seed;
     unsigned char *dbmask, seedmask[EVP_MAX_MD_SIZE];
-    int mdlen;
 
+    // default sha1
     if (md == NULL)
         md = EVP_sha1();
     if (mgf1md == NULL)
         mgf1md = md;
 
-    mdlen = EVP_MD_size(md);
+    // ハッシュの出力バイト数
+    const int mdlen = EVP_MD_size(md);
 
-    if (flen > emlen - 2 * mdlen - 1) {
+    // 左辺:入力メッセージ長
+    if (flen > tlen - 2 * mdlen - 2) {
+        // b. RSA キーサイズに対して、データ長が長すぎる
         RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1,
                RSA_R_DATA_TOO_LARGE_FOR_KEY_SIZE);
         return 0;
     }
 
-    if (emlen < 2 * mdlen + 1) {
+    // 左辺: 出力メッセージ長(Cipher Text)
+    if (tlen < 2 * mdlen + 2) {
+        // RSAキーサイズが小さすぎる
         RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1,
                RSA_R_KEY_SIZE_TOO_SMALL);
         return 0;
     }
 
+    // i. 
     to[0] = 0;
     seed = to + 1;
-    db = to + mdlen + 1;
-
-    if (!EVP_Digest((void *)param, plen, db, NULL, md, NULL))
+    db = seed + mdlen;
+    // a. Label のハッシュを取る 
+    if (!EVP_Digest((void *)param,  // データの先頭ポインタ
+                    plen,           // データの長さ
+                    db,             // 出力ハッシュポインタ
+                    NULL,           // サイズ
+                    md,             // タイプ
+                    NULL))          // 独自実装
+    {
+        // error
         return 0;
-    memset(db + mdlen, 0, emlen - flen - 2 * mdlen - 1);
-    db[emlen - flen - mdlen - 1] = 0x01;
-    memcpy(db + emlen - flen - mdlen, from, (unsigned int)flen);
-    if (RAND_bytes(seed, mdlen) <= 0)
+    }
+    // PS
+    // tlen: k
+    // flen: メッセージ長
+    // mdlen: ハッシュ長
+    memset(db + mdlen, 0, tlen - flen - 2 * mdlen - 2);
+    // 0x01
+    db[tlen - flen - mdlen - 2] = 0x01;
+    // M
+    memcpy(db + tlen - 1 - flen - mdlen, from, (unsigned int)flen);
+    // ハッシュ長のランダム値を生成する
+    if (RAND_bytes(seed, mdlen) <= 0){
+        // error
         return 0;
+    }
 
-    dbmask = OPENSSL_malloc(emlen - mdlen);
+    dbmask = OPENSSL_malloc(tlen - mdlen - 1);
     if (dbmask == NULL) {
+        // mallocの失敗
         RSAerr(RSA_F_RSA_PADDING_ADD_PKCS1_OAEP_MGF1, ERR_R_MALLOC_FAILURE);
         return 0;
     }
 
-    if (PKCS1_MGF1(dbmask, emlen - mdlen, seed, mdlen, mgf1md) < 0)
+    // e. MGF
+    if (PKCS1_MGF1(dbmask, tlen - mdlen - 1, seed, mdlen, mgf1md) < 0){
         goto err;
-    for (i = 0; i < emlen - mdlen; i++)
+    }
+    // f. xor
+    for (i = 0; i < tlen - mdlen - 1; i++){
         db[i] ^= dbmask[i];
-
-    if (PKCS1_MGF1(seedmask, mdlen, db, emlen - mdlen, mgf1md) < 0)
+    }
+    // g. MGF
+    if (PKCS1_MGF1(seedmask, mdlen, db, tlen - 1 - mdlen, mgf1md) < 0){
         goto err;
-    for (i = 0; i < mdlen; i++)
+    }
+    // h. seed xor
+    for (i = 0; i < mdlen; i++){
         seed[i] ^= seedmask[i];
+    }
 
     OPENSSL_free(dbmask);
     return 1;
@@ -111,14 +150,20 @@ int RSA_padding_check_PKCS1_OAEP(unsigned char *to, int tlen,
                                              param, plen, NULL, NULL);
 }
 
-int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
-                                      const unsigned char *from, int flen,
-                                      int num, const unsigned char *param,
-                                      int plen, const EVP_MD *md,
+int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to,            // 出力
+                                      int tlen,                     // RSAキーの長さ 
+                                      const unsigned char *from,    //
+                                      int flen,                     // エンコードされたメッセージの長さ 
+                                      int num,                      // RSAキーの法の長さ
+                                      const unsigned char *param,   //
+                                      int plen,                     // 
+                                      const EVP_MD *md,
                                       const EVP_MD *mgf1md)
 {
-    int i, dblen, mlen = -1, one_index = 0, msg_index;
-    unsigned int good, found_one_byte;
+    int i, dblen, mlen = -1;
+    int one_index = 0, msg_index;
+    unsigned int good;
+    unsigned int found_one_byte;
     const unsigned char *maskedseed, *maskeddb;
     /*
      * |em| is the encoded message, zero-padded to exactly |num| bytes: em =
@@ -239,7 +284,10 @@ int RSA_padding_check_PKCS1_OAEP_mgf1(unsigned char *to, int tlen,
     return mlen;
 }
 
-int PKCS1_MGF1(unsigned char *mask, long len,
+// 重要
+// 済み
+int PKCS1_MGF1(unsigned char *mask,
+               long len,
                const unsigned char *seed, long seedlen, const EVP_MD *dgst)
 {
     long i, outlen = 0;

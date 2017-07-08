@@ -35,7 +35,6 @@ static int encode_pkcs1(unsigned char **out, int *out_len, int type,
     X509_ALGOR algor;
     ASN1_TYPE parameter;
     ASN1_OCTET_STRING digest;
-    uint8_t *der = NULL;
     int len;
 
     sig.algor = &algor;
@@ -57,6 +56,7 @@ static int encode_pkcs1(unsigned char **out, int *out_len, int type,
     sig.digest->data = (unsigned char *)m;
     sig.digest->length = m_len;
 
+    uint8_t *der = NULL;
     len = i2d_X509_SIG(&sig, &der);
     if (len < 0)
         return 0;

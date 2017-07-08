@@ -14,6 +14,9 @@
 static int seeded = 0;
 static int egdsocket = 0;
 
+/**
+ * @brief ランダムファイル名
+ */
 int app_RAND_load_file(const char *file, int dont_warn)
 {
     int consider_randfile = (file == NULL);

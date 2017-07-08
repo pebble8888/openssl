@@ -339,6 +339,9 @@ int password_callback(char *buf, int bufsiz, int verify, PW_CB_DATA *cb_tmp)
 
 static char *app_get_pass(const char *arg, int keepbio);
 
+/**
+ *
+ */
 int app_passwd(const char *arg1, const char *arg2, char **pass1, char **pass2)
 {
     int same;

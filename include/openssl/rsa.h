@@ -42,7 +42,7 @@ extern "C" {
 # endif
 
 # define RSA_3   0x3L
-# define RSA_F4  0x10001L
+# define RSA_F4  0x10001L /* 65537 is prime */
 
 # define RSA_METHOD_FLAG_NO_CHECK        0x0001/* don't check pub/private
                                                 * match */

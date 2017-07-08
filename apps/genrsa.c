@@ -31,9 +31,16 @@ NON_EMPTY_TRANSLATION_UNIT
 static int genrsa_cb(int p, int n, BN_GENCB *cb);
 
 typedef enum OPTION_choice {
-    OPT_ERR = -1, OPT_EOF = 0, OPT_HELP,
-    OPT_3, OPT_F4, OPT_ENGINE,
-    OPT_OUT, OPT_RAND, OPT_PASSOUT, OPT_CIPHER
+    OPT_ERR = -1,
+    OPT_EOF = 0, 
+    OPT_HELP,
+    OPT_3,
+    OPT_F4, 
+    OPT_ENGINE,
+    OPT_OUT, 
+    OPT_RAND, 
+    OPT_PASSOUT, 
+    OPT_CIPHER
 } OPTION_CHOICE;
 
 const OPTIONS genrsa_options[] = {
@@ -52,27 +59,36 @@ const OPTIONS genrsa_options[] = {
     {NULL}
 };
 
+/**
+ * RSA 鍵ペア生成
+ */
 int genrsa_main(int argc, char **argv)
 {
     BN_GENCB *cb = BN_GENCB_new();
     PW_CB_DATA cb_data;
-    ENGINE *eng = NULL;
     BIGNUM *bn = BN_new();
     BIO *out = NULL;
     const BIGNUM *e;
-    RSA *rsa = NULL;
     const EVP_CIPHER *enc = NULL;
-    int ret = 1, num = DEFBITS, private = 0;
-    unsigned long f4 = RSA_F4;
-    char *outfile = NULL, *passoutarg = NULL, *passout = NULL;
-    char *inrand = NULL, *prog, *hexe, *dece;
+    int ret = 1;
+
+    ENGINE *eng = NULL; // default
+    unsigned long f4 = RSA_F4; // default
+    char *inrand = NULL; // default
+
+    char *outfile = NULL;
+    char *passoutarg = NULL;
+    char *passout = NULL;
+    char *prog, *hexe, *dece;
     OPTION_CHOICE o;
 
     if (bn == NULL || cb == NULL)
         goto end;
 
+    // 生成中出力関数のセット(不要ロジック)
     BN_GENCB_set(cb, genrsa_cb, bio_err);
 
+    // オプション
     prog = opt_init(argc, argv, genrsa_options);
     while ((o = opt_next()) != OPT_EOF) {
         switch (o) {
@@ -110,20 +126,25 @@ int genrsa_main(int argc, char **argv)
     }
     argc = opt_num_rest();
     argv = opt_rest();
-    private = 1;
+    int private = 1;
 
+    // RSAキーのピット数(=2048)
+    int num = DEFBITS;
     if (argv[0] && (!opt_int(argv[0], &num) || num <= 0))
         goto end;
 
+    // 意味はなさそう
     if (!app_passwd(NULL, passoutarg, NULL, &passout)) {
         BIO_printf(bio_err, "Error getting password\n");
         goto end;
     }
 
+    // 書き込み用ファイルオープン 
     out = bio_open_owner(outfile, FORMAT_PEM, private);
     if (out == NULL)
         goto end;
 
+    // ランダムファイル名のロード
     if (!app_RAND_load_file(NULL, 1) && inrand == NULL
         && !RAND_status()) {
         BIO_printf(bio_err,
@@ -133,12 +154,17 @@ int genrsa_main(int argc, char **argv)
         BIO_printf(bio_err, "%ld semi-random bytes loaded\n",
                    app_RAND_load_files(inrand));
 
-    BIO_printf(bio_err, "Generating RSA private key, %d bit long modulus\n",
-               num);
-    rsa = eng ? RSA_new_method(eng) : RSA_new();
+    BIO_printf(bio_err, "Generating RSA private key, %d bit long modulus\n", num);
+
+    // RSA_new()で生成する
+    RSA *rsa = eng ? RSA_new_method(eng) : RSA_new();
     if (rsa == NULL)
         goto end;
 
+    // 1) BIGNUMに0x10001をセットする(0x10001より大きな素数を探す) 
+    // 2) RSAキーペア生成 
+    // num : 2048
+    // rsa : 生成された鍵ペア
     if (!BN_set_word(bn, f4) || !RSA_generate_key_ex(rsa, num, bn, cb))
         goto end;
 
@@ -155,6 +181,7 @@ int genrsa_main(int argc, char **argv)
     cb_data.password = passout;
     cb_data.prompt_info = outfile;
     assert(private);
+    // private pem を書き込む
     if (!PEM_write_bio_RSAPrivateKey(out, rsa, enc, NULL, 0,
                                      (pem_password_cb *)password_callback,
                                      &cb_data))

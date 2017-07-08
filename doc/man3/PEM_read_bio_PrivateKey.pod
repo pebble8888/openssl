@@ -339,7 +339,7 @@ DES encryption, using the pass phrase "hello":
 
 Read a private key from a BIO using a pass phrase callback:
 
- key = PEM_read_bio_PrivateKey(bp, NULL, pass_cb, "My Private Key");
+ key = (bp, NULL, pass_cb, "My Private Key");
  if (key == NULL) {
      /* Error */
  }

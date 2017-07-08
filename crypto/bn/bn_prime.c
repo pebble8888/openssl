@@ -51,8 +51,15 @@ int BN_GENCB_call(BN_GENCB *cb, int a, int b)
     return 0;
 }
 
-int BN_generate_prime_ex(BIGNUM *ret, int bits, int safe,
-                         const BIGNUM *add, const BIGNUM *rem, BN_GENCB *cb)
+/**
+ * @brief
+ */
+int BN_generate_prime_ex(BIGNUM *ret,
+                         int bits,          // 2048
+                         int safe,          // 0
+                         const BIGNUM *add, // NULL 
+                         const BIGNUM *rem, // NULL
+                         BN_GENCB *cb)
 {
     BIGNUM *t;
     int found = 0;
@@ -71,6 +78,7 @@ int BN_generate_prime_ex(BIGNUM *ret, int bits, int safe,
         return 0;
     }
 
+    // 2048個の素数で割った剰余を入れるエリア
     mods = OPENSSL_zalloc(sizeof(*mods) * NUMPRIMES);
     if (mods == NULL)
         goto err;
@@ -85,6 +93,7 @@ int BN_generate_prime_ex(BIGNUM *ret, int bits, int safe,
  loop:
     /* make a random number and set the top and bottom bits */
     if (add == NULL) {
+        // こっち
         if (!probable_prime(ret, bits, mods))
             goto err;
     } else {
@@ -102,6 +111,7 @@ int BN_generate_prime_ex(BIGNUM *ret, int bits, int safe,
         goto err;
 
     if (!safe) {
+        // 素数かどうかの大雑把で高速な判定
         i = BN_is_prime_fasttest_ex(ret, checks, ctx, 0, cb);
         if (i == -1)
             goto err;
@@ -273,6 +283,9 @@ static int witness(BIGNUM *w, const BIGNUM *a, const BIGNUM *a1,
     return 1;
 }
 
+/**
+ * @brief
+ */
 static int probable_prime(BIGNUM *rnd, int bits, prime_t *mods)
 {
     int i;
@@ -286,8 +299,11 @@ static int probable_prime(BIGNUM *rnd, int bits, prime_t *mods)
     /* we now have a random number 'rnd' to test. */
     for (i = 1; i < NUMPRIMES; i++) {
         BN_ULONG mod = BN_mod_word(rnd, (BN_ULONG)primes[i]);
-        if (mod == (BN_ULONG)-1)
+        if (mod == (BN_ULONG)-1){
+            // 最初の2048個の素数で割った剰余が-1である
+            // 素数の可能性が高い
             return 0;
+        }
         mods[i] = (prime_t) mod;
     }
     /*

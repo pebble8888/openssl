@@ -109,6 +109,7 @@ int rsautl_main(int argc, char **argv)
         case OPT_HEXDUMP:
             hexdump = 1;
             break;
+        // <pad>
         case OPT_RAW:
             pad = RSA_NO_PADDING;
             break;
@@ -124,6 +125,7 @@ int rsautl_main(int argc, char **argv)
         case OPT_X931:
             pad = RSA_X931_PADDING;
             break;
+        // </pad>
         case OPT_SIGN:
             rsa_mode = RSA_SIGN;
             need_priv = 1;
@@ -233,21 +235,23 @@ int rsautl_main(int argc, char **argv)
     switch (rsa_mode) {
 
     case RSA_VERIFY:
+        // verify  : public decrypt
         rsa_outlen = RSA_public_decrypt(rsa_inlen, rsa_in, rsa_out, rsa, pad);
         break;
 
     case RSA_SIGN:
-        rsa_outlen =
-            RSA_private_encrypt(rsa_inlen, rsa_in, rsa_out, rsa, pad);
+        // sign    : private encrypt
+        rsa_outlen = RSA_private_encrypt(rsa_inlen, rsa_in, rsa_out, rsa, pad);
         break;
 
     case RSA_ENCRYPT:
+        // encrypt : public encrypt
         rsa_outlen = RSA_public_encrypt(rsa_inlen, rsa_in, rsa_out, rsa, pad);
         break;
 
     case RSA_DECRYPT:
-        rsa_outlen =
-            RSA_private_decrypt(rsa_inlen, rsa_in, rsa_out, rsa, pad);
+        // decrypt : private decrypt
+        rsa_outlen = RSA_private_decrypt(rsa_inlen, rsa_in, rsa_out, rsa, pad);
         break;
     }
 

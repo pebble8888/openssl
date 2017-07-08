@@ -12,6 +12,9 @@
 
 static BIGNUM *euclid(BIGNUM *a, BIGNUM *b);
 
+/**
+ * 最大公約数
+ */
 int BN_gcd(BIGNUM *r, const BIGNUM *in_a, const BIGNUM *in_b, BN_CTX *ctx)
 {
     BIGNUM *a, *b, *t;
@@ -121,8 +124,13 @@ static BIGNUM *BN_mod_inverse_no_branch(BIGNUM *in,
                                         const BIGNUM *a, const BIGNUM *n,
                                         BN_CTX *ctx);
 
+/**
+ * 
+ */
 BIGNUM *BN_mod_inverse(BIGNUM *in,
-                       const BIGNUM *a, const BIGNUM *n, BN_CTX *ctx)
+                       const BIGNUM *a,
+                       const BIGNUM *n,
+                       BN_CTX *ctx)
 {
     BIGNUM *rv;
     int noinv;
@@ -132,8 +140,13 @@ BIGNUM *BN_mod_inverse(BIGNUM *in,
     return rv;
 }
 
+/**
+ *
+ */
 BIGNUM *int_bn_mod_inverse(BIGNUM *in,
-                           const BIGNUM *a, const BIGNUM *n, BN_CTX *ctx,
+                           const BIGNUM *a,
+                           const BIGNUM *n,
+                           BN_CTX *ctx,
                            int *pnoinv)
 {
     BIGNUM *A, *B, *X, *Y, *M, *D, *T, *R = NULL;

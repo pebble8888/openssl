@@ -291,8 +291,9 @@ static int pkey_rsa_encrypt(EVP_PKEY_CTX *ctx,
         int klen = RSA_size(ctx->pkey->pkey.rsa);
         if (!setup_tbuf(rctx, ctx))
             return -1;
-        if (!RSA_padding_add_PKCS1_OAEP_mgf1(rctx->tbuf, klen,
-                                             in, inlen,
+        if (!RSA_padding_add_PKCS1_OAEP_mgf1(rctx->tbuf,
+                                             klen,              //  
+                                             in, inlen,         // from   rsa key
                                              rctx->oaep_label,
                                              rctx->oaep_labellen,
                                              rctx->md, rctx->mgf1md))
@@ -322,11 +323,15 @@ static int pkey_rsa_decrypt(EVP_PKEY_CTX *ctx,
                                   ctx->pkey->pkey.rsa, RSA_NO_PADDING);
         if (ret <= 0)
             return ret;
-        ret = RSA_padding_check_PKCS1_OAEP_mgf1(out, ret, rctx->tbuf,
-                                                ret, ret,
+        ret = RSA_padding_check_PKCS1_OAEP_mgf1(out, // to:出力
+                                                ret,
+                                                rctx->tbuf,
+                                                ret,
+                                                ret,
                                                 rctx->oaep_label,
                                                 rctx->oaep_labellen,
-                                                rctx->md, rctx->mgf1md);
+                                                rctx->md,
+                                                rctx->mgf1md);
     } else
         ret = RSA_private_decrypt(inlen, in, out, ctx->pkey->pkey.rsa,
                                   rctx->pad_mode);

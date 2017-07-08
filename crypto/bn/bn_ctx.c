@@ -209,6 +209,9 @@ void BN_CTX_end(BN_CTX *ctx)
     CTXDBG_EXIT(ctx);
 }
 
+/**
+ *
+ */
 BIGNUM *BN_CTX_get(BN_CTX *ctx)
 {
     BIGNUM *ret;
@@ -298,7 +301,9 @@ static void BN_POOL_finish(BN_POOL *p)
     }
 }
 
-
+/**
+ *
+ */
 static BIGNUM *BN_POOL_get(BN_POOL *p, int flag)
 {
     BIGNUM *bn;

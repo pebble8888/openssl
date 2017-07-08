@@ -279,6 +279,9 @@ int RAND_write_file(const char *file)
     return (rand_err ? -1 : ret);
 }
 
+/**
+ * @brief ランダムデータを生成するためにOSが提供するファイル名
+ */
 const char *RAND_file_name(char *buf, size_t size)
 {
     char *s = NULL;

@@ -63,6 +63,9 @@ const RSA_METHOD *RSA_null_method(void)
     return NULL;
 }
 
+/**
+ * public encrypt
+ */
 static int rsa_ossl_public_encrypt(int flen, const unsigned char *from,
                                   unsigned char *to, RSA *rsa, int padding)
 {
@@ -103,9 +106,11 @@ static int rsa_ossl_public_encrypt(int flen, const unsigned char *from,
 
     switch (padding) {
     case RSA_PKCS1_PADDING:
+        // v1.5 type 2
         i = RSA_padding_add_PKCS1_type_2(buf, num, from, flen);
         break;
     case RSA_PKCS1_OAEP_PADDING:
+        // OAEP
         i = RSA_padding_add_PKCS1_OAEP(buf, num, from, flen, NULL, 0);
         break;
     case RSA_SSLV23_PADDING:
@@ -234,11 +239,15 @@ static int rsa_blinding_invert(BN_BLINDING *b, BIGNUM *f, BIGNUM *unblind,
 }
 
 /* signing */
-static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
-                                   unsigned char *to, RSA *rsa, int padding)
+// 重要
+// private encrypt
+static int rsa_ossl_private_encrypt(int flen, 
+                                    const unsigned char *from,
+                                    unsigned char *to,
+                                    RSA *rsa,
+                                    int padding)
 {
-    BIGNUM *f, *ret, *res;
-    int i, j, k, num = 0, r = -1;
+    int i, j, k, r = -1;
     unsigned char *buf = NULL;
     BN_CTX *ctx = NULL;
     int local_blinding = 0;
@@ -253,18 +262,25 @@ static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
     if ((ctx = BN_CTX_new()) == NULL)
         goto err;
     BN_CTX_start(ctx);
-    f = BN_CTX_get(ctx);
-    ret = BN_CTX_get(ctx);
-    num = BN_num_bytes(rsa->n);
+    BIGNUM* f = BN_CTX_get(ctx);
+    BIGNUM* ret = BN_CTX_get(ctx);
+    int num = BN_num_bytes(rsa->n); // RSAキーの modulo n のバイト数
     buf = OPENSSL_malloc(num);
     if (f == NULL || ret == NULL || buf == NULL) {
         RSAerr(RSA_F_RSA_OSSL_PRIVATE_ENCRYPT, ERR_R_MALLOC_FAILURE);
         goto err;
     }
 
+    // signing にはOAEPは使っていない
     switch (padding) {
     case RSA_PKCS1_PADDING:
-        i = RSA_padding_add_PKCS1_type_1(buf, num, from, flen);
+        // default
+        // type 1 (not OAEP) 
+        i = RSA_padding_add_PKCS1_type_1(
+                buf,
+                num,
+                from,
+                flen);
         break;
     case RSA_X931_PADDING:
         i = RSA_padding_add_X931(buf, num, from, flen);
@@ -311,6 +327,7 @@ static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
         ((rsa->p != NULL) &&
          (rsa->q != NULL) &&
          (rsa->dmp1 != NULL) && (rsa->dmq1 != NULL) && (rsa->iqmp != NULL))) {
+        // s = m.power(d) mod n
         if (!rsa->meth->rsa_mod_exp(ret, f, rsa, ctx))
             goto err;
     } else {
@@ -341,6 +358,7 @@ static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
         if (!rsa_blinding_invert(blinding, ret, unblind, ctx))
             goto err;
 
+    BIGNUM* res;
     if (padding == RSA_X931_PADDING) {
         BN_sub(f, rsa->n, ret);
         if (BN_cmp(ret, f) > 0)
@@ -368,8 +386,14 @@ static int rsa_ossl_private_encrypt(int flen, const unsigned char *from,
     return (r);
 }
 
-static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
-                                   unsigned char *to, RSA *rsa, int padding)
+/**
+ * 重要 private decrypt
+ */
+static int rsa_ossl_private_decrypt(int flen,
+                                    const unsigned char *from,
+                                    unsigned char *to,
+                                    RSA *rsa,
+                                    int padding)
 {
     BIGNUM *f, *ret;
     int j, num = 0, r = -1;
@@ -385,6 +409,7 @@ static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
     BIGNUM *unblind = NULL;
     BN_BLINDING *blinding = NULL;
 
+    // Big Num 生成
     if ((ctx = BN_CTX_new()) == NULL)
         goto err;
     BN_CTX_start(ctx);
@@ -473,9 +498,11 @@ static int rsa_ossl_private_decrypt(int flen, const unsigned char *from,
 
     switch (padding) {
     case RSA_PKCS1_PADDING:
+        // v1.5 padding : default
         r = RSA_padding_check_PKCS1_type_2(to, num, buf, j, num);
         break;
     case RSA_PKCS1_OAEP_PADDING:
+        // OAEP padding
         r = RSA_padding_check_PKCS1_OAEP(to, num, buf, j, num, NULL, 0);
         break;
     case RSA_SSLV23_PADDING:

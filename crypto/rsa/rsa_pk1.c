@@ -15,8 +15,13 @@
 #include <openssl/rsa.h>
 #include <openssl/rand.h>
 
-int RSA_padding_add_PKCS1_type_1(unsigned char *to, int tlen,
-                                 const unsigned char *from, int flen)
+/**
+ * type1
+ */
+int RSA_padding_add_PKCS1_type_1(unsigned char *to,
+                                 int tlen,
+                                 const unsigned char *from, 
+                                 int flen)
 {
     int j;
     unsigned char *p;
@@ -41,6 +46,9 @@ int RSA_padding_add_PKCS1_type_1(unsigned char *to, int tlen,
     return (1);
 }
 
+/**
+ * type1
+ */
 int RSA_padding_check_PKCS1_type_1(unsigned char *to, int tlen,
                                    const unsigned char *from, int flen,
                                    int num)
@@ -114,8 +122,15 @@ int RSA_padding_check_PKCS1_type_1(unsigned char *to, int tlen,
     return (j);
 }
 
-int RSA_padding_add_PKCS1_type_2(unsigned char *to, int tlen,
-                                 const unsigned char *from, int flen)
+/**
+ * public encrypt
+ * 重要 v1.5
+ * type2 
+ */
+int RSA_padding_add_PKCS1_type_2(unsigned char *to,
+                                 int tlen,
+                                 const unsigned char *from,
+                                 int flen)
 {
     int i, j;
     unsigned char *p;
@@ -151,6 +166,9 @@ int RSA_padding_add_PKCS1_type_2(unsigned char *to, int tlen,
     return (1);
 }
 
+/**
+ * 重要 v1.5
+ */
 int RSA_padding_check_PKCS1_type_2(unsigned char *to, int tlen,
                                    const unsigned char *from, int flen,
                                    int num)

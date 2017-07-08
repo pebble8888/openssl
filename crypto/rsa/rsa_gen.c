@@ -19,8 +19,10 @@
 #include <openssl/bn.h>
 #include "rsa_locl.h"
 
+/*
 static int rsa_builtin_keygen(RSA *rsa, int bits, BIGNUM *e_value,
                               BN_GENCB *cb);
+                              */
 
 /*
  * NB: this wrapper would normally be placed in rsa_lib.c and the static
@@ -31,15 +33,22 @@ static int rsa_builtin_keygen(RSA *rsa, int bits, BIGNUM *e_value,
  */
 int RSA_generate_key_ex(RSA *rsa, int bits, BIGNUM *e_value, BN_GENCB *cb)
 {
+    /*
     if (rsa->meth->rsa_keygen)
         return rsa->meth->rsa_keygen(rsa, bits, e_value, cb);
+    */
     return rsa_builtin_keygen(rsa, bits, e_value, cb);
 }
 
-static int rsa_builtin_keygen(RSA *rsa, int bits, BIGNUM *e_value,
+/**
+ * @brief RSAキーペア生成
+ */
+static int rsa_builtin_keygen(RSA *rsa,
+                              int bits,             // RSA鍵ビット数 2048
+                              BIGNUM *e_value,      // 最初は0x100001がセットされている
                               BN_GENCB *cb)
 {
-    BIGNUM *r0 = NULL, *r1 = NULL, *r2 = NULL, *r3 = NULL, *tmp;
+    BIGNUM *tmp;
     int bitsp, bitsq, ok = -1, n = 0;
     BN_CTX *ctx = NULL;
 
@@ -57,10 +66,10 @@ static int rsa_builtin_keygen(RSA *rsa, int bits, BIGNUM *e_value,
     if (ctx == NULL)
         goto err;
     BN_CTX_start(ctx);
-    r0 = BN_CTX_get(ctx);
-    r1 = BN_CTX_get(ctx);
-    r2 = BN_CTX_get(ctx);
-    r3 = BN_CTX_get(ctx);
+    BIGNUM *r0 = BN_CTX_get(ctx); // 0
+    BIGNUM *r1 = BN_CTX_get(ctx); // 0
+    BIGNUM *r2 = BN_CTX_get(ctx); // 0
+    BIGNUM *r3 = BN_CTX_get(ctx); // 0
     if (r3 == NULL)
         goto err;
 
@@ -88,30 +97,39 @@ static int rsa_builtin_keygen(RSA *rsa, int bits, BIGNUM *e_value,
     if (BN_copy(rsa->e, e_value) == NULL)
         goto err;
 
-    /* generate p and q */
     for (;;) {
+        // generate p : prime
         if (!BN_generate_prime_ex(rsa->p, bitsp, 0, NULL, NULL, cb))
             goto err;
+        // r2 = p-1
         if (!BN_sub(r2, rsa->p, BN_value_one()))
             goto err;
+        // r1 = gcd(p-1, rsa->e)
         if (!BN_gcd(r1, r2, rsa->e, ctx))
             goto err;
+        // 0x10001より大きいprimeである 
         if (BN_is_one(r1))
             break;
+        // progress
         if (!BN_GENCB_call(cb, 2, n++))
             goto err;
     }
     if (!BN_GENCB_call(cb, 3, 0))
         goto err;
+
+    // generate q : prime
     for (;;) {
+        // pと異なる素数を生成
         do {
             if (!BN_generate_prime_ex(rsa->q, bitsq, 0, NULL, NULL, cb))
                 goto err;
         } while (BN_cmp(rsa->p, rsa->q) == 0);
+        // r2 <- p-1
         if (!BN_sub(r2, rsa->q, BN_value_one()))
             goto err;
         if (!BN_gcd(r1, r2, rsa->e, ctx))
             goto err;
+        // 0x10001より大きいprimeである 
         if (BN_is_one(r1))
             break;
         if (!BN_GENCB_call(cb, 2, n++))
@@ -119,17 +137,19 @@ static int rsa_builtin_keygen(RSA *rsa, int bits, BIGNUM *e_value,
     }
     if (!BN_GENCB_call(cb, 3, 1))
         goto err;
+
+    // p > qの大きい順序を揃える
     if (BN_cmp(rsa->p, rsa->q) < 0) {
         tmp = rsa->p;
         rsa->p = rsa->q;
         rsa->q = tmp;
     }
 
-    /* calculate n */
+    /* calculate n = p * q */
     if (!BN_mul(rsa->n, rsa->p, rsa->q, ctx))
         goto err;
 
-    /* calculate d */
+    /* calculate d = (p-1)*(q-1) */
     if (!BN_sub(r1, rsa->p, BN_value_one()))
         goto err;               /* p-1 */
     if (!BN_sub(r2, rsa->q, BN_value_one()))

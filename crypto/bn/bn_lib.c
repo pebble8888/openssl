@@ -392,6 +392,9 @@ BN_ULONG BN_get_word(const BIGNUM *a)
     return 0;
 }
 
+/**
+ * @brief BIGNUMにwの値をセットする
+ */
 int BN_set_word(BIGNUM *a, BN_ULONG w)
 {
     bn_check_top(a);
@@ -880,6 +883,9 @@ int BN_to_montgomery(BIGNUM *r, const BIGNUM *a, BN_MONT_CTX *mont,
     return BN_mod_mul_montgomery(r, a, &(mont->RR), mont, ctx);
 }
 
+/**
+ * @brief
+ */
 void BN_with_flags(BIGNUM *dest, const BIGNUM *b, int flags)
 {
     dest->d = b->d;
