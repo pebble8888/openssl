@@ -291,10 +291,14 @@ int BN_mod_exp_recp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
     return (ret);
 }
 
+/**
+ *
+ */
 int BN_mod_exp_mont(BIGNUM *rr, const BIGNUM *a, const BIGNUM *p,
                     const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *in_mont)
 {
-    int i, j, bits, ret = 0, wstart, wend, window, wvalue;
+    int i, j, bits, wstart, wend, window, wvalue;
+    int ret = 0;
     int start = 1;
     BIGNUM *d, *r;
     const BIGNUM *aa;

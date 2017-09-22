@@ -14,6 +14,10 @@
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 
+/**
+ * @param int top
+ * @param int bottom
+ */
 static int bnrand(int pseudorand, BIGNUM *rnd, int bits, int top, int bottom)
 {
     unsigned char *buf = NULL;
@@ -66,7 +70,9 @@ static int bnrand(int pseudorand, BIGNUM *rnd, int bits, int top, int bottom)
     }
 
     if (top >= 0) {
+        // BN_RAND_TOP_ONE or BN_RAND_TOP_TWO
         if (top) {
+            // BN_RAND_TOP_TWO
             if (bit == 0) {
                 buf[0] = 1;
                 buf[1] |= 0x80;
@@ -74,12 +80,15 @@ static int bnrand(int pseudorand, BIGNUM *rnd, int bits, int top, int bottom)
                 buf[0] |= (3 << (bit - 1));
             }
         } else {
+            // BN_RAND_TOP_ONE
             buf[0] |= (1 << bit);
         }
     }
     buf[0] &= ~mask;
-    if (bottom)                 /* set bottom bit if requested */
+    if (bottom){                 /* set bottom bit if requested */
+        // BN_RAND_BOTTOM_ODD1
         buf[bytes - 1] |= 1;
+    }
     if (!BN_bin2bn(buf, bytes, rnd))
         goto err;
     ret = 1;
@@ -93,6 +102,10 @@ toosmall:
     return 0;
 }
 
+/**
+ * @param int top
+ * @param int bottom
+ */
 int BN_rand(BIGNUM *rnd, int bits, int top, int bottom)
 {
     return bnrand(0, rnd, bits, top, bottom);

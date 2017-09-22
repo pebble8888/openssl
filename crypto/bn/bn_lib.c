@@ -577,6 +577,9 @@ int BN_ucmp(const BIGNUM *a, const BIGNUM *b)
     return (0);
 }
 
+// a < b  であれば -1
+// a > b  であれば  1
+// a == b であれば  0 
 int BN_cmp(const BIGNUM *a, const BIGNUM *b)
 {
     int i;

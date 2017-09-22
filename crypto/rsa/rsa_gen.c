@@ -44,7 +44,7 @@ int RSA_generate_key_ex(RSA *rsa, int bits, BIGNUM *e_value, BN_GENCB *cb)
  * @brief RSAキーペア生成
  */
 static int rsa_builtin_keygen(RSA *rsa,
-                              int bits,             // RSA鍵ビット数 2048
+                              int bits,             // RSA鍵ビット数 2048 (16以上のみ許可)
                               BIGNUM *e_value,      // 最初は0x100001がセットされている
                               BN_GENCB *cb)
 {
@@ -97,8 +97,8 @@ static int rsa_builtin_keygen(RSA *rsa,
     if (BN_copy(rsa->e, e_value) == NULL)
         goto err;
 
+    // generate p : prime
     for (;;) {
-        // generate p : prime
         if (!BN_generate_prime_ex(rsa->p, bitsp, 0, NULL, NULL, cb))
             goto err;
         // r2 = p-1
@@ -107,13 +107,14 @@ static int rsa_builtin_keygen(RSA *rsa,
         // r1 = gcd(p-1, rsa->e)
         if (!BN_gcd(r1, r2, rsa->e, ctx))
             goto err;
-        // 0x10001より大きいprimeである 
+        // p-1, e は互いに素である
         if (BN_is_one(r1))
             break;
         // progress
         if (!BN_GENCB_call(cb, 2, n++))
             goto err;
     }
+    // progress
     if (!BN_GENCB_call(cb, 3, 0))
         goto err;
 
@@ -124,38 +125,43 @@ static int rsa_builtin_keygen(RSA *rsa,
             if (!BN_generate_prime_ex(rsa->q, bitsq, 0, NULL, NULL, cb))
                 goto err;
         } while (BN_cmp(rsa->p, rsa->q) == 0);
-        // r2 <- p-1
+        // r2 <- q-1
         if (!BN_sub(r2, rsa->q, BN_value_one()))
             goto err;
+        // r1 <- gcd(q-1, e)
         if (!BN_gcd(r1, r2, rsa->e, ctx))
             goto err;
-        // 0x10001より大きいprimeである 
+        // q-1, eは互いに素である
         if (BN_is_one(r1))
             break;
+        // progress
         if (!BN_GENCB_call(cb, 2, n++))
             goto err;
     }
+    // progress
     if (!BN_GENCB_call(cb, 3, 1))
         goto err;
 
-    // p > qの大きい順序を揃える
+    // p, q の大きさの順序を揃える
     if (BN_cmp(rsa->p, rsa->q) < 0) {
         tmp = rsa->p;
         rsa->p = rsa->q;
         rsa->q = tmp;
     }
+    // p > q となっている
 
     /* calculate n = p * q */
     if (!BN_mul(rsa->n, rsa->p, rsa->q, ctx))
         goto err;
 
-    /* calculate d = (p-1)*(q-1) */
+    /* calculate d = e ^ -1 mod (p-1)*(q-1) */
     if (!BN_sub(r1, rsa->p, BN_value_one()))
         goto err;               /* p-1 */
     if (!BN_sub(r2, rsa->q, BN_value_one()))
         goto err;               /* q-1 */
-    if (!BN_mul(r0, r1, r2, ctx))
+    if (!BN_mul(r0, r1, r2, ctx)){
         goto err;               /* (p-1)(q-1) */
+    }
     {
         BIGNUM *pr0 = BN_new();
 
@@ -170,6 +176,8 @@ static int rsa_builtin_keygen(RSA *rsa,
         BN_free(pr0);
     }
 
+    // calculate d mod (p-1)
+    // calculate d mod (q-1)
     {
         BIGNUM *d = BN_new();
 
@@ -187,7 +195,7 @@ static int rsa_builtin_keygen(RSA *rsa,
         /* We MUST free d before any further use of rsa->d */
         BN_free(d);
     }
-
+    // calculate inverse of q mod p
     {
         BIGNUM *p = BN_new();
 

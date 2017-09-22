@@ -29,6 +29,9 @@ static int probable_prime_dh_safe(BIGNUM *rnd, int bits,
                                   const BIGNUM *add, const BIGNUM *rem,
                                   BN_CTX *ctx);
 
+/**
+ * @brief progress callback 
+ */
 int BN_GENCB_call(BN_GENCB *cb, int a, int b)
 {
     /* No callback means continue */
@@ -56,18 +59,18 @@ int BN_GENCB_call(BN_GENCB *cb, int a, int b)
  */
 int BN_generate_prime_ex(BIGNUM *ret,
                          int bits,          // 2048
-                         int safe,          // 0
-                         const BIGNUM *add, // NULL 
-                         const BIGNUM *rem, // NULL
-                         BN_GENCB *cb)
+                         int safe,          // 安全素数条件 0:false
+                         const BIGNUM *add, // NULL ???
+                         const BIGNUM *rem, // NULL ???
+                         BN_GENCB *cb)      // progress callback
 {
     BIGNUM *t;
     int found = 0;
     int i, j, c1 = 0;
     BN_CTX *ctx = NULL;
     prime_t *mods = NULL;
+    // 
     int checks = BN_prime_checks_for_size(bits);
-
     if (bits < 2) {
         /* There are no prime numbers this small. */
         BNerr(BN_F_BN_GENERATE_PRIME_EX, BN_R_BITS_TOO_SMALL);
@@ -78,7 +81,7 @@ int BN_generate_prime_ex(BIGNUM *ret,
         return 0;
     }
 
-    // 2048個の素数で割った剰余を入れるエリア
+    // 最初の2048個の素数で割った剰余を入れるエリア
     mods = OPENSSL_zalloc(sizeof(*mods) * NUMPRIMES);
     if (mods == NULL)
         goto err;
@@ -93,10 +96,11 @@ int BN_generate_prime_ex(BIGNUM *ret,
  loop:
     /* make a random number and set the top and bottom bits */
     if (add == NULL) {
-        // こっち
+        // こちらが使われる
         if (!probable_prime(ret, bits, mods))
             goto err;
     } else {
+        // こちらの使い道は不明なので無視して良い
         if (safe) {
             if (!probable_prime_dh_safe(ret, bits, add, rem, ctx))
                 goto err;
@@ -111,6 +115,7 @@ int BN_generate_prime_ex(BIGNUM *ret,
         goto err;
 
     if (!safe) {
+        // 安全素数でなくても良い場合
         // 素数かどうかの大雑把で高速な判定
         i = BN_is_prime_fasttest_ex(ret, checks, ctx, 0, cb);
         if (i == -1)
@@ -118,6 +123,7 @@ int BN_generate_prime_ex(BIGNUM *ret,
         if (i == 0)
             goto loop;
     } else {
+        // 安全素数が欲しい場合
         /*
          * for "safe prime" generation, check that (p-1)/2 is prime. Since a
          * prime is odd, We just need to divide by 2
@@ -160,8 +166,12 @@ int BN_is_prime_ex(const BIGNUM *a, int checks, BN_CTX *ctx_passed,
     return BN_is_prime_fasttest_ex(a, checks, ctx_passed, 0, cb);
 }
 
+// [素数の可能性あり] なら1を返す
+// [合成数] なら0を返す
+// エラー時は-1を返す
 int BN_is_prime_fasttest_ex(const BIGNUM *a, int checks, BN_CTX *ctx_passed,
-                            int do_trial_division, BN_GENCB *cb)
+                            int do_trial_division, /* trial division (試行割算法) を使うかどうか */
+                            BN_GENCB *cb)
 {
     int i, j, ret = -1;
     int k;
@@ -180,6 +190,7 @@ int BN_is_prime_fasttest_ex(const BIGNUM *a, int checks, BN_CTX *ctx_passed,
         /* a is even => a is prime if and only if a == 2 */
         return BN_is_word(a, 2);
     if (do_trial_division) {
+        // use trial division
         for (i = 1; i < NUMPRIMES; i++) {
             BN_ULONG mod = BN_mod_word(a, primes[i]);
             if (mod == (BN_ULONG)-1)
@@ -213,6 +224,7 @@ int BN_is_prime_fasttest_ex(const BIGNUM *a, int checks, BN_CTX *ctx_passed,
         goto err;
     }
 
+    /* a1_odd は d に相当する */
     /* write  A1  as  A1_odd * 2^k */
     k = 1;
     while (!BN_is_bit_set(A1, k))
@@ -235,9 +247,12 @@ int BN_is_prime_fasttest_ex(const BIGNUM *a, int checks, BN_CTX *ctx_passed,
         /* now 1 <= check < a */
 
         j = witness(check, a, A1, A1_odd, k, ctx, mont);
-        if (j == -1)
+        if (j == -1){
+            // 計算に失敗エラー
             goto err;
+        }
         if (j) {
+            // 合成数確定
             ret = 0;
             goto err;
         }
@@ -253,55 +268,76 @@ int BN_is_prime_fasttest_ex(const BIGNUM *a, int checks, BN_CTX *ctx_passed,
     }
     BN_MONT_CTX_free(mont);
 
-    return (ret);
+    return ret;
 }
 
 static int witness(BIGNUM *w, const BIGNUM *a, const BIGNUM *a1,
                    const BIGNUM *a1_odd, int k, BN_CTX *ctx,
                    BN_MONT_CTX *mont)
 {
+    // a1_odd は d に相当する
     if (!BN_mod_exp_mont(w, w, a1_odd, a, ctx, mont)) /* w := w^a1_odd mod a */
         return -1;
-    if (BN_is_one(w))
+    if (BN_is_one(w)){
+        // prime
         return 0;               /* probably prime */
-    if (BN_cmp(w, a1) == 0)
+    }
+    if (BN_cmp(w, a1) == 0){
+        // prime
         return 0;               /* w == -1 (mod a), 'a' is probably prime */
+    }
+    // -1かどうかの判定はここでは使わない???
+    // 2のべきの小さい値の方から検証する
     while (--k) {
         if (!BN_mod_mul(w, w, w, a, ctx)) /* w := w^2 mod a */
             return -1;
-        if (BN_is_one(w))
+        if (BN_is_one(w)){
+            // composite
             return 1;           /* 'a' is composite, otherwise a previous 'w'
                                  * would have been == -1 (mod 'a') */
-        if (BN_cmp(w, a1) == 0)
+        }
+        if (BN_cmp(w, a1) == 0){
             return 0;           /* w == -1 (mod a), 'a' is probably prime */
+        }
     }
+
     /*
      * If we get here, 'w' is the (a-1)/2-th power of the original 'w', and
      * it is neither -1 nor +1 -- so 'a' cannot be prime
      */
     bn_check_top(w);
+    // compsite
     return 1;
 }
 
 /**
  * @brief
+ * @param BIGNUM *rnd
+ * @param int bits
+ * @param prime_t *mods テンポラリ領域
+ * @return 0: fail
  */
 static int probable_prime(BIGNUM *rnd, int bits, prime_t *mods)
 {
     int i;
     BN_ULONG delta;
+    // BN_MASK2: 64bit最大値
     BN_ULONG maxdelta = BN_MASK2 - primes[NUMPRIMES - 1];
+    // BN_BITS2: 8
     char is_single_word = bits <= BN_BITS2;
 
  again:
+    // 最上位ビットを1にし、最下位ビットを1(奇数)な乱数を生成する
     if (!BN_rand(rnd, bits, BN_RAND_TOP_TWO, BN_RAND_BOTTOM_ODD))
         return (0);
     /* we now have a random number 'rnd' to test. */
+    // ここで p2, p3, ... , p2048 全てについて、
+    // mod 計算を実行して型をBN_ULONG型に変更しておく
+    // p(n)で割り切れるかどうかだけを知りたいので必要なのは余りだけ。
     for (i = 1; i < NUMPRIMES; i++) {
         BN_ULONG mod = BN_mod_word(rnd, (BN_ULONG)primes[i]);
         if (mod == (BN_ULONG)-1){
-            // 最初の2048個の素数で割った剰余が-1である
-            // 素数の可能性が高い
+            // mod calculus fails
             return 0;
         }
         mods[i] = (prime_t) mod;
@@ -310,7 +346,9 @@ static int probable_prime(BIGNUM *rnd, int bits, prime_t *mods)
      * If bits is so small that it fits into a single word then we
      * additionally don't want to exceed that many bits.
      */
+#if 0 /* {{{ */
     if (is_single_word) {
+        // @note ここを通ることはない
         BN_ULONG size_limit;
 
         if (bits == BN_BITS2) {
@@ -325,11 +363,13 @@ static int probable_prime(BIGNUM *rnd, int bits, prime_t *mods)
         if (size_limit < maxdelta)
             maxdelta = size_limit;
     }
+#endif /* }}} */
     delta = 0;
  loop:
+#if 0 /* {{{ */ 
     if (is_single_word) {
+        // @note ここを通ることはない
         BN_ULONG rnd_word = BN_get_word(rnd);
-
         /*-
          * In the case that the candidate prime is a single word then
          * we check that:
@@ -349,13 +389,22 @@ static int probable_prime(BIGNUM *rnd, int bits, prime_t *mods)
                 goto loop;
             }
         }
-    } else {
+    } else
+#endif /* }}} */
+    {
+        // modsには rnd を最初の2048個の素数で割った余りが入っている
         for (i = 1; i < NUMPRIMES; i++) {
             /*
              * check that rnd is not a prime and also that gcd(rnd-1,primes)
              * == 1 (except for 2)
              */
-            if (((mods[i] + delta) % primes[i]) <= 1) {
+            BN_ULONG m = mods[i] + delta;
+            BN_ULONG mm = (m % primes[i]);
+            if (mm <= 1) {
+                // mm が0の時は、rnd    がprimes[i]で割り切れる
+                // mm が1の時は、rnd -1 がprimes[i]で割り切れる
+                // 強素数を選ぶことにあまり意味はないので、ここの条件はmm == 0
+                // のみでよい
                 delta += 2;
                 if (delta > maxdelta)
                     goto again;
@@ -363,12 +412,18 @@ static int probable_prime(BIGNUM *rnd, int bits, prime_t *mods)
             }
         }
     }
+    // rnd + delta は p2, p3, ..., p2048に対して割り切れないことが分かっているので
+    // rnd + deltaを答えとする
+    // rnd に delta を追加する
     if (!BN_add_word(rnd, delta))
-        return (0);
+        return 0;
+    // bit数が2048より大きくなってしまうのでチェックする
     if (BN_num_bits(rnd) != bits)
         goto again;
+    // BigNumの整合性チェック?
     bn_check_top(rnd);
-    return (1);
+    // success
+    return 1;
 }
 
 int bn_probable_prime_dh(BIGNUM *rnd, int bits,
